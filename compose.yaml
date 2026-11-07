@@ -1,0 +1,44 @@
+# Учебный стенд курса S3. Запускается командой `make up` из корня репозитория.
+# minio — S3-совместимое хранилище: API на порту 19000, веб-консоль на порту 19001.
+# init  — одноразовый контейнер: создаёт учебных пользователей и их права, затем завершается.
+name: s3-course
+
+services:
+  minio:
+    image: s3-course-minio:2025-10-15
+    build:
+      context: .
+      dockerfile: Dockerfile.minio
+    container_name: minio
+    mem_limit: 1g
+    environment:
+      MINIO_ROOT_USER: courseadmin            # учебный администратор, вход в консоль
+      MINIO_ROOT_PASSWORD: local-admin-123456
+      MINIO_REGION_NAME: us-east-1
+    ports:
+      - "127.0.0.1:19000:9000"   # S3 API:   http://localhost:19000
+      - "127.0.0.1:19001:9001"   # консоль:  http://localhost:19001
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
+  init:
+    image: s3-course-minio:2025-10-15
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/scripts/bootstrap.sh"]
+    environment:
+      MINIO_ROOT_USER: courseadmin
+      MINIO_ROOT_PASSWORD: local-admin-123456
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./policies:/policies:ro
+    restart: "no"
+
+volumes:
+  s3-data:
